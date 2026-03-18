@@ -62,35 +62,6 @@ unsigned char *normalize(ENERGY_TYPE *energy, const size_t width, const size_t h
     return normalized;
 }
 
-// void energy(ENERGY_TYPE *energy, const unsigned char *image, const size_t width, const size_t max_col, const size_t height, const size_t cpp) {
-//     const size_t datasize_image = width * height * cpp * sizeof(unsigned char);
-//     const size_t datasize_energy = width * height * cpp * sizeof(ENERGY_TYPE);
-//     const size_t datasize_double = width * height * cpp * sizeof(double);
-//     double *dx = (double*) malloc(datasize_double);
-//     double *dy = (double*) malloc(datasize_double);
-
-//     const size_t w3 = width*cpp;
-
-//     // SOBEL FILTER
-//     for (size_t i = 0; i < datasize_image; i++) {
-//         // dx[i] = (i % w3 < cpp ? 0 : image[i-cpp]) - ((i+cpp) % w3 < cpp ? 0 : image[i+cpp]);
-//         dx[i] = (i % w3 < cpp ? 0 : image[i-cpp]) - ((i+cpp) % w3 < cpp ? 0 : image[i+cpp]);
-//     }
-//     for (size_t i = 0; i < datasize_image; i++) {
-//         // dy[i] = (i < w3 ? 0 : image[i-w3]) - (i + w3 >= datasize_image ? 0 : image[i+w3]);
-//         dy[i] = (i < w3 ? 0 : image[i-w3]) - (i + w3 >= datasize_image ? 0 : image[i+w3]);
-//     }
-//     for (size_t i = 0; i < datasize_image; i++) {
-//         energy[i] = sqrt(dx[i]*dx[i] + dy[i]*dy[i]);
-//         if (i % w3 >= (max_col-1)*cpp) {
-//             energy[i] = BIG_VALUE;
-//         }
-//     }
-//     free(dx);
-//     free(dy);
-//     grayscalify(energy, width, height, cpp);
-// }
-
 void energy(ENERGY_TYPE *energy, const unsigned char *image,
             const size_t width, const size_t max_col,
             const size_t height, const size_t cpp)
@@ -119,18 +90,6 @@ void energy(ENERGY_TYPE *energy, const unsigned char *image,
             energy[row * width + col] = (ENERGY_TYPE)mag / cpp;
         }
     }
-
-    // disable edge seams
-    // for (int row = 0; row < height; row++)
-    // {
-    //     energy[row * width + 0] = BIG_VALUE;
-    //     energy[row * width + max_col - 1] = BIG_VALUE;
-    // }
-    // for (int col = 0; col < max_col; col++)
-    // {
-    //     energy[0 * width + col] = BIG_VALUE;
-    //     energy[(height - 1) * width + col] = BIG_VALUE;
-    // }
 }
 
 void cum_energy_path_cost(ENERGY_TYPE *energy, const size_t width, const size_t max_col, const size_t height)
@@ -228,9 +187,9 @@ void remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t cha
 
 int main(int argc, char *argv[])
 {
-    if (argc < 3)
+    if (argc < 4)
     {
-        printf("USAGE: ./a.out input_image output_image\n");
+        printf("USAGE: ./a.out input_image output_image remove_N_seams\n");
         exit(EXIT_FAILURE);
     }
 
@@ -239,6 +198,7 @@ int main(int argc, char *argv[])
 
     snprintf(image_in_name, MAX_FILENAME, "%s", argv[1]);
     snprintf(image_out_name, MAX_FILENAME, "%s", argv[2]);
+    int remove_N_seams = atoi(argv[3]);
 
     // Load image from file and allocate space for the output image
     int width, height, cpp;
@@ -260,19 +220,23 @@ int main(int argc, char *argv[])
     }
 
     // Copy the input image into output and mesure execution time
-#define ITERATIONS 800
-    for (size_t i = 0; i < ITERATIONS; i++)
+    double start = omp_get_wtime();
+    for (size_t i = 0; i < remove_N_seams; i++)
     {
-        double start = omp_get_wtime();
         energy(image_energy, image_in, width, width - i, height, cpp);
 
         cum_energy_path_cost(image_energy, width, width - i, height);
-        remove_seam(image_energy, image_in, cpp, width, width - i, height, 0); // i == ITERATIONS - 1
+        remove_seam(image_energy, image_in, cpp, width, width - i, height, 0); // i == remove_N_seams - 1
 
-        double stop = omp_get_wtime();
-        if (i % 10 == 0)
-            printf("Seems like time: %f s\n", stop - start);
+        if (i % (remove_N_seams / 10) == 0)
+        {
+            printf("\r%d%%", (i * 100 / remove_N_seams));
+            fflush(stdout);
+        }
     }
+    double stop = omp_get_wtime();
+    printf("\nTotal: %fs, Avg iter: %f\n", stop - start, (stop - start) / remove_N_seams);
+
     // make_black(image_energy, width, height);
     // energy(image_energy, image_in, width, width - 199, height, cpp);
 
