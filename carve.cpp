@@ -78,7 +78,7 @@ void energy(ENERGY_TYPE *energy,
                 double Gx = -s(row - 1, col - 1, c) - 2 * s(row, col - 1, c) - s(row + 1, col - 1, c) + s(row - 1, col + 1, c) + 2 * s(row, col + 1, c) + s(row + 1, col + 1, c);
                 double Gy = +s(row - 1, col - 1, c) + 2 * s(row - 1, col, c) + s(row - 1, col + 1, c) - s(row + 1, col - 1, c) - 2 * s(row + 1, col, c) - s(row + 1, col + 1, c);
 
-                mag += sqrt(Gx * Gx + Gy * Gy);
+                mag += Gx * Gx + Gy * Gy;
             }
 
             energy[row * width + col] = (ENERGY_TYPE)mag / cpp;
@@ -247,14 +247,25 @@ int main(int argc, char *argv[])
         printf("Removing %d seams\n", remove_N_seams);
     }
 
+    double energy_time_sum = 0;
+    double cum_energy_time_sum = 0;
+    double seam_time_sum = 0;
+
     // Copy the input image into output and mesure execution time
     double start = omp_get_wtime();
     for (size_t i = 0; i < remove_N_seams; i++)
     {
+        double start_iter = omp_get_wtime();
         energy(image_energy, image_in, width, height, cpp);
-
+        double stop_energy = omp_get_wtime();
         cum_energy_path_cost(image_energy, width, height);
+        double stop_cum_energy = omp_get_wtime();
         width = remove_seam(image_energy, image_in, cpp, width, height, 0); // i == remove_N_seams - 1
+        double stop_seam = omp_get_wtime();
+
+        energy_time_sum += stop_energy - start_iter;
+        cum_energy_time_sum += stop_cum_energy - stop_energy;
+        seam_time_sum += stop_seam - stop_cum_energy;
 
         if (i % (remove_N_seams / 10) == 0)
         {
@@ -263,7 +274,11 @@ int main(int argc, char *argv[])
         }
     }
     double stop = omp_get_wtime();
+    double total_partial_time = energy_time_sum + cum_energy_time_sum + seam_time_sum;
     printf("\nTotal: %fs, Avg iter: %f\n", stop - start, (stop - start) / remove_N_seams);
+    printf("Avg energy time: %fs (%.2f%%)\n", energy_time_sum / remove_N_seams, 100 * energy_time_sum / total_partial_time);
+    printf("Avg cumulative energy time: %fs (%.2f%%)\n", cum_energy_time_sum / remove_N_seams, 100 * cum_energy_time_sum / total_partial_time);
+    printf("Avg seam removal time: %fs (%.2f%%)\n", seam_time_sum / remove_N_seams, 100 * seam_time_sum / total_partial_time);
 
     unsigned char *image_out = image_in;
     // unsigned char *image_out = normalize(image_energy, width, height, cpp);
