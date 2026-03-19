@@ -2,7 +2,7 @@
 
 # USAGE: ./run_prog fastcarve.cpp [ARGS]
 
-cat <<EOT
+sbatch <<EOT
 
 #SBATCH --reservation=fri
 #SBATCH --job-name=code_sample
