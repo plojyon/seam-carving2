@@ -299,7 +299,7 @@ int main(int argc, char *argv[])
     for (size_t i = 0; i < remove_N_seams; i++)
     {
         double start_iter = omp_get_wtime();
-        energy(image_energy, image_in, width, height, cpp, 14);
+        energy(image_energy, image_in, width, height, cpp, 8);
         double stop_energy = omp_get_wtime();
         cum_energy_path_cost(image_energy, width, height);
         double stop_cum_energy = omp_get_wtime();
