@@ -109,7 +109,7 @@ void cum_line(ENERGY_TYPE* energy, int x_start, int x_end, const int y, const in
 
 void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) {
     // parameters
-    const int thread_count = 20;
+    const int thread_count = 12; // will consume thread_count or thread_count + 1 threads
 
     const int trig_base = width / thread_count + (width % thread_count != 0);
     const int trig_height = trig_base / 2 + (trig_base % 2 != 0);
@@ -122,7 +122,9 @@ void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) 
         // Keep in mind y_start > y_end
         int y_start = height - 2 - band * bandwidth;
         int y_end = y_start > bandwidth? y_start - bandwidth : -1;
-
+        #pragma omp parallel 
+    {
+        #pragma omp for
         for (int tid = 0; tid < thread_count; tid++) {
             // earthbound triangles
             for (int i = 0; i < y_start - y_end; i++) {
@@ -132,6 +134,7 @@ void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) 
                 cum_line(energy, x_start, x_end, y_start - i, width, 1.0f);
             }
         }
+        #pragma omp for
         for (int tid = 0; tid < thread_count + 1; tid++) {
             // moonbound triangles
             for (int i = 0; i < y_start - y_end; i++) {
@@ -142,6 +145,7 @@ void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) 
             }
         }
     }
+}
 }
 
 
