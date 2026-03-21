@@ -90,17 +90,17 @@ void energy(ENERGY_TYPE *energy,
 void cum_line(ENERGY_TYPE* energy, int x_start, int x_end, const int y, const int width, const float brightness) {
     // helper for cum_parallel
 
-    x_start = std::clamp(x_start, 0, width - 1);
-    x_end = std::clamp(x_end, 0, width - 1);
+    x_start = std::clamp(x_start, 0, width);
+    x_end = std::clamp(x_end, 0, width);
 
     for (int x = x_start; x < x_end; x++) {
         ENERGY_TYPE min_e = energy[(y + 1) * width + x];
         if (x > 0) {
             min_e = std::min(min_e, energy[(y + 1) * width + x - 1]);
-            }
-        if (x < width - 2) {
+        }
+        if (x < width - 1) {
             min_e = std::min(min_e, energy[(y + 1) * width + x + 1]);
-            }
+        }
         energy[y * width + x] += min_e;
 
         // energy[y * width + x] = brightness * BIG_VALUE; // TODO: remove
@@ -109,7 +109,7 @@ void cum_line(ENERGY_TYPE* energy, int x_start, int x_end, const int y, const in
 
 void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) {
     // parameters
-    const int thread_count = 200;
+    const int thread_count = 20;
 
     const int trig_base = width / thread_count + (width % thread_count != 0);
     const int trig_height = trig_base / 2 + (trig_base % 2 != 0);
@@ -138,8 +138,8 @@ void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) 
                 // const int tid = 0; //omp_get_thread_num();
                 const int x_start = tid * trig_width - i;
                 const int x_end = x_start + 2 * i;
-                cum_line(energy, std::max(x_start, 0), x_end, y_start - i, width, 2.0f);
-}
+                cum_line(energy, x_start, x_end, y_start - i, width, 2.0f);
+            }
         }
     }
 }
@@ -314,10 +314,17 @@ int main(int argc, char *argv[])
     }
     double stop = omp_get_wtime();
     double total_partial_time = energy_time_sum + cum_energy_time_sum + seam_time_sum;
-    printf("\nTotal: %fs, Avg iter: %f\n", stop - start, (stop - start) / remove_N_seams);
-    printf("Avg energy time: %fs (%.2f%%)\n", energy_time_sum / remove_N_seams, 100 * energy_time_sum / total_partial_time);
-    printf("Avg cumulative energy time: %fs (%.2f%%)\n", cum_energy_time_sum / remove_N_seams, 100 * cum_energy_time_sum / total_partial_time);
-    printf("Avg seam removal time: %fs (%.2f%%)\n", seam_time_sum / remove_N_seams, 100 * seam_time_sum / total_partial_time);
+    if (remove_N_seams != 0) {
+        printf("\nTotal: %fs, Avg iter: %f\n", stop - start, (stop - start) / remove_N_seams);
+        printf("Avg energy time: %fs (%.2f%%)\n", energy_time_sum / remove_N_seams, 100 * energy_time_sum / total_partial_time);
+        printf("Avg cumulative energy time: %fs (%.2f%%)\n", cum_energy_time_sum / remove_N_seams, 100 * cum_energy_time_sum / total_partial_time);
+        printf("Avg seam removal time: %fs (%.2f%%)\n", seam_time_sum / remove_N_seams, 100 * seam_time_sum / total_partial_time);
+    }
+    if (remove_N_seams == 0) {
+        energy(image_energy, image_in, width, height, cpp);
+        cum_parallel(image_energy, width, height);
+        width = remove_seam(image_energy, image_in, cpp, width, height, true);
+    }
 
     unsigned char *image_out = image_in;
     // unsigned char *image_out = normalize(image_energy, width, height, cpp);
