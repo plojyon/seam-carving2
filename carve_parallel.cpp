@@ -29,14 +29,6 @@ void grayscalify(ENERGY_TYPE *image, const size_t width, const size_t height, co
     }
 }
 
-void make_black(ENERGY_TYPE *image, const size_t width, const size_t height)
-{
-    for (size_t i = 0; i < width * height; i++)
-    {
-        image[i] = 0;
-    }
-}
-
 unsigned char *normalize(ENERGY_TYPE *energy, const size_t width, const size_t height, const size_t cpp)
 {
     unsigned char *normalized = (unsigned char *)calloc(width * height * sizeof(unsigned char) * cpp, 1);
@@ -60,20 +52,22 @@ unsigned char *normalize(ENERGY_TYPE *energy, const size_t width, const size_t h
     return normalized;
 }
 
-void energy(ENERGY_TYPE *energy, const unsigned char *image,
-            const size_t width, const size_t max_col,
-            const size_t height, const size_t cpp)
+void energy(ENERGY_TYPE *energy,
+            const unsigned char *image,
+            const size_t width,
+            const size_t height,
+            const size_t cpp)
 {
     auto s = [&](int row, int col, int c) -> int
     {
         row = std::clamp(row, 0, (int)height - 1);
-        col = std::clamp(col, 0, (int)max_col - 1);
+        col = std::clamp(col, 0, (int)width - 1);
         return image[(row * width + col) * cpp + c];
     };
 
     for (int row = 0; row < (int)height; row++)
     {
-        for (int col = 0; col < (int)max_col; col++)
+        for (int col = 0; col < (int)width; col++)
         {
             double mag = 0;
 
@@ -82,7 +76,7 @@ void energy(ENERGY_TYPE *energy, const unsigned char *image,
                 double Gx = -s(row - 1, col - 1, c) - 2 * s(row, col - 1, c) - s(row + 1, col - 1, c) + s(row - 1, col + 1, c) + 2 * s(row, col + 1, c) + s(row + 1, col + 1, c);
                 double Gy = +s(row - 1, col - 1, c) + 2 * s(row - 1, col, c) + s(row - 1, col + 1, c) - s(row + 1, col - 1, c) - 2 * s(row + 1, col, c) - s(row + 1, col + 1, c);
 
-                mag += sqrt(Gx * Gx + Gy * Gy);
+                mag += Gx * Gx + Gy * Gy;
             }
 
             energy[row * width + col] = (ENERGY_TYPE)mag / cpp;
@@ -91,31 +85,33 @@ void energy(ENERGY_TYPE *energy, const unsigned char *image,
 }
 
 
-void cum_line(ENERGY_TYPE* energy, int x_start, int x_end, const int y, const int max_col, const int width, const float brightness) {
+
+
+void cum_line(ENERGY_TYPE* energy, int x_start, int x_end, const int y, const int width, const float brightness) {
     // helper for cum_parallel
 
-    x_start = std::clamp(x_start, 0, max_col - 1);
-    x_end = std::clamp(x_end, 0, max_col - 1);
+    x_start = std::clamp(x_start, 0, width - 1);
+    x_end = std::clamp(x_end, 0, width - 1);
 
     for (int x = x_start; x < x_end; x++) {
         ENERGY_TYPE min_e = energy[(y + 1) * width + x];
         if (x > 0) {
             min_e = std::min(min_e, energy[(y + 1) * width + x - 1]);
-        }
-        if (x < max_col - 2) {
+            }
+        if (x < width - 2) {
             min_e = std::min(min_e, energy[(y + 1) * width + x + 1]);
-        }
+            }
         energy[y * width + x] += min_e;
 
         // energy[y * width + x] = brightness * BIG_VALUE; // TODO: remove
     }
 }
 
-void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t max_col, const size_t height) {
+void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) {
     // parameters
     const int thread_count = 200;
 
-    const int trig_base = max_col / thread_count + (max_col % thread_count != 0);
+    const int trig_base = width / thread_count + (width % thread_count != 0);
     const int trig_height = trig_base / 2 + (trig_base % 2 != 0);
 
     const int trig_width = 2*trig_height; // must be even!! please
@@ -133,7 +129,7 @@ void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t max_col,
                 // const int tid = 0; //omp_get_thread_num();
                 const int x_start = tid * trig_width + i;
                 const int x_end = x_start + trig_width - 2 * i;
-                cum_line(energy, x_start, x_end, y_start - i, max_col, width, 1.0f);
+                cum_line(energy, x_start, x_end, y_start - i, width, 1.0f);
             }
         }
         for (int tid = 0; tid < thread_count + 1; tid++) {
@@ -142,38 +138,57 @@ void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t max_col,
                 // const int tid = 0; //omp_get_thread_num();
                 const int x_start = tid * trig_width - i;
                 const int x_end = x_start + 2 * i;
-                cum_line(energy, std::max(x_start, 0), x_end, y_start - i, max_col, width, 2.0f);
-            }
+                cum_line(energy, std::max(x_start, 0), x_end, y_start - i, width, 2.0f);
+}
         }
     }
 }
 
 
 
+void left_shift_range(unsigned char *img,
+                      size_t src_start,
+                      size_t src_end,
+                      size_t l_shift)
+{
+
+    if (src_start >= src_end)
+    {
+        return;
+    }
+
+    if (l_shift == 0)
+    {
+        return;
+    }
+
+    if (src_start < l_shift)
+    {
+        fprintf(stderr,
+                "Error: destination underflows. Tried to move [%zu, %zu) by %zu\n",
+                src_start,
+                src_end,
+                l_shift);
+        exit(EXIT_FAILURE);
+    }
+
+    unsigned char *src = img + src_start;
+    unsigned char *dst = img + (src_start - l_shift);
+
+    size_t pixels_to_move = src_end - src_start;
+    size_t bytes_to_move = pixels_to_move;
+
+    memmove(dst, src, bytes_to_move);
+}
 
 void remove_pixel(size_t row, size_t col, unsigned char *image, const size_t cpp, const size_t width, const size_t height, bool debug)
 {
     if (!debug)
     {
-        // energy_pixel_idx is the index of the pixel in the energy array (single channel)
-
-        // Start of the row
-        unsigned char *row_start = image + row * width * cpp;
-
-        // Destination (pixel to remove)
-        unsigned char *dst = row_start + col * cpp;
-
-        // Source (next pixel to the right)
-        unsigned char *src = row_start + (col + 1) * cpp;
-
-        // Number of bytes to shift
-        size_t bytes_to_move = (width - col - 1) * cpp;
-
-        memmove(dst, src, bytes_to_move);
-
-        image[(row * width + width - 1) * cpp + 0] = 0;
-        image[(row * width + width - 1) * cpp + 1] = 0;
-        image[(row * width + width - 1) * cpp + 2] = 0;
+        // Shift before the ray because of all accumulated black pixels
+        left_shift_range(image, row * width * cpp, (row * width + col) * cpp, (row)*cpp);
+        // Shift after the ray because of all accumulated black pixels + 1
+        left_shift_range(image, (row * width + col + 1) * cpp, (row + 1) * width * cpp, (row + 1) * cpp);
     }
     else
     {
@@ -185,12 +200,13 @@ void remove_pixel(size_t row, size_t col, unsigned char *image, const size_t cpp
     }
 }
 
-void remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t channels, const size_t width, const size_t max_col, const size_t height, bool debug)
+size_t remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t channels, const size_t width, const size_t height, bool debug)
 {
+
     // Find smallest energy in the firt row to start
     size_t min_col_idx = 0;
     ENERGY_TYPE min_e = cum_energy[0];
-    for (size_t col = 1; col < max_col; col++)
+    for (size_t col = 1; col < width; col++)
     {
         if (cum_energy[col] < min_e)
         {
@@ -211,7 +227,7 @@ void remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t cha
                 min_col_idx--;
             }
         }
-        if (min_col_idx != max_col - 1)
+        if (min_col_idx != width - 1)
         {
             if (cum_energy[row * width + min_col_idx + 1] < min_e)
             {
@@ -221,6 +237,7 @@ void remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t cha
         }
         remove_pixel(row, min_col_idx, image, channels, width, height, debug);
     }
+    return width - (not debug);
 }
 
 int main(int argc, char *argv[])
@@ -236,7 +253,6 @@ int main(int argc, char *argv[])
 
     snprintf(image_in_name, MAX_FILENAME, "%s", argv[1]);
     snprintf(image_out_name, MAX_FILENAME, "%s", argv[2]);
-    int remove_N_seams = atoi(argv[3]);
 
     // Load image from file and allocate space for the output image
     int width, height, cpp;
@@ -257,13 +273,38 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    int remove_N_seams;
+    char *percent = strchr(argv[3], '%');
+    if (percent == NULL)
+    {
+        remove_N_seams = atoi(argv[3]);
+    }
+    else
+    {
+        *percent = '\0';
+        remove_N_seams = (int)(atoi(argv[3]) / 100.0 * width);
+        printf("Removing %d seams\n", remove_N_seams);
+    }
+
+    double energy_time_sum = 0;
+    double cum_energy_time_sum = 0;
+    double seam_time_sum = 0;
+
     // Copy the input image into output and mesure execution time
     double start = omp_get_wtime();
     for (size_t i = 0; i < remove_N_seams; i++)
     {
-        energy(image_energy, image_in, width, width - i, height, cpp);
-        cum_parallel(image_energy, width, width - i, height);
-        remove_seam(image_energy, image_in, cpp, width, width - i, height, i == remove_N_seams - 1);
+        double start_iter = omp_get_wtime();
+        energy(image_energy, image_in, width, height, cpp);
+        double stop_energy = omp_get_wtime();
+        cum_parallel(image_energy, width, height);
+        double stop_cum_energy = omp_get_wtime();
+        width = remove_seam(image_energy, image_in, cpp, width, height, i == remove_N_seams - 1);
+        double stop_seam = omp_get_wtime();
+
+        energy_time_sum += stop_energy - start_iter;
+        cum_energy_time_sum += stop_cum_energy - stop_energy;
+        seam_time_sum += stop_seam - stop_cum_energy;
 
         if (remove_N_seams < 10 || i % (remove_N_seams / 10) == 0)
         {
@@ -272,14 +313,14 @@ int main(int argc, char *argv[])
         }
     }
     double stop = omp_get_wtime();
+    double total_partial_time = energy_time_sum + cum_energy_time_sum + seam_time_sum;
     printf("\nTotal: %fs, Avg iter: %f\n", stop - start, (stop - start) / remove_N_seams);
+    printf("Avg energy time: %fs (%.2f%%)\n", energy_time_sum / remove_N_seams, 100 * energy_time_sum / total_partial_time);
+    printf("Avg cumulative energy time: %fs (%.2f%%)\n", cum_energy_time_sum / remove_N_seams, 100 * cum_energy_time_sum / total_partial_time);
+    printf("Avg seam removal time: %fs (%.2f%%)\n", seam_time_sum / remove_N_seams, 100 * seam_time_sum / total_partial_time);
 
-    if (remove_N_seams == 0) {
-        energy(image_energy, image_in, width, width, height, cpp);
-        cum_parallel(image_energy, width, width, height);
-    }
-    // unsigned char *image_out = image_in;
-    unsigned char *image_out = normalize(image_energy, width, height, cpp);
+    unsigned char *image_out = image_in;
+    // unsigned char *image_out = normalize(image_energy, width, height, cpp);
 
     const char *file_type = strrchr(image_out_name, '.');
     if (file_type == NULL)
