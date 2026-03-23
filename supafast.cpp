@@ -254,9 +254,9 @@ size_t remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t c
 
 int main(int argc, char *argv[])
 {
-    if (argc < 6)
+    if (argc < 4)
     {
-        printf("USAGE: ./a.out input_image output_image remove_N_seams n_threads_energy n_threads_cum\n");
+        printf("USAGE: ./a.out input_image output_image remove_N_seams [n_threads_energy] [n_threads_cum]\n");
         exit(EXIT_FAILURE);
     }
 
@@ -298,8 +298,36 @@ int main(int argc, char *argv[])
         printf("Removing %d seams\n", remove_N_seams);
     }
 
-    int n_threads_energy = atoi(argv[4]);
-    int n_threads_cum = atoi(argv[5]);
+    int max_threads;
+
+#pragma omp parallel
+    {
+#pragma omp single
+        {
+            max_threads = omp_get_num_threads();
+        }
+    }
+
+    int n_threads_energy;
+    if (argc < 5)
+    {
+        n_threads_energy = max_threads;
+        printf("n_threads_energy ommited, using max threads (%d)\n", int(n_threads_energy));
+    }
+    else
+    {
+        n_threads_energy = atoi(argv[4]);
+    }
+    int n_threads_cum;
+    if (argc < 6)
+    {
+        n_threads_cum = std::min(max_threads, height / 210 + 1);
+        printf("n_threads_cum ommited, using heuristic (%d)\n", int(n_threads_cum));
+    }
+    else
+    {
+        n_threads_cum = atoi(argv[5]);
+    }
 
     double energy_time_sum = 0;
     double cum_energy_time_sum = 0;
