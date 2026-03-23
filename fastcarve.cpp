@@ -97,38 +97,6 @@ void energy(
     }
 }
 
-// void energy(ENERGY_TYPE *energy,
-//             const unsigned char *image,
-//             const size_t width,
-//             const size_t height,
-//             const size_t cpp)
-// {
-//     auto s = [&](int row, int col, int c) -> int
-//     {
-//         row = std::clamp(row, 0, (int)height - 1);
-//         col = std::clamp(col, 0, (int)width - 1);
-//         return image[(row * width + col) * cpp + c];
-//     };
-
-//     for (int row = 0; row < (int)height; row++)
-//     {
-//         for (int col = 0; col < (int)width; col++)
-//         {
-//             double mag = 0;
-
-//             for (int c = 0; c < cpp; c++)
-//             {
-//                 double Gx = -s(row - 1, col - 1, c) - 2 * s(row, col - 1, c) - s(row + 1, col - 1, c) + s(row - 1, col + 1, c) + 2 * s(row, col + 1, c) + s(row + 1, col + 1, c);
-//                 double Gy = +s(row - 1, col - 1, c) + 2 * s(row - 1, col, c) + s(row - 1, col + 1, c) - s(row + 1, col - 1, c) - 2 * s(row + 1, col, c) - s(row + 1, col + 1, c);
-
-//                 mag += sqrt(Gx * Gx + Gy * Gy);
-//             }
-
-//             energy[row * width + col] = (ENERGY_TYPE)mag / cpp;
-//         }
-//     }
-// }
-
 void cum_energy_path_cost(ENERGY_TYPE *energy, const size_t width, const size_t height)
 {
     // Calculate cumulative path cost starting from bottom to top
@@ -246,9 +214,9 @@ size_t remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t c
 
 int main(int argc, char *argv[])
 {
-    if (argc < 4)
+    if (argc < 5)
     {
-        printf("USAGE: ./a.out input_image output_image remove_N_seams\n");
+        printf("USAGE: ./a.out input_image output_image remove_N_seams n_threads_energy\n");
         exit(EXIT_FAILURE);
     }
 
@@ -290,6 +258,8 @@ int main(int argc, char *argv[])
         printf("Removing %d seams\n", remove_N_seams);
     }
 
+    int n_threads_energy = atoi(argv[4]);
+
     double energy_time_sum = 0;
     double cum_energy_time_sum = 0;
     double seam_time_sum = 0;
@@ -299,7 +269,7 @@ int main(int argc, char *argv[])
     for (size_t i = 0; i < remove_N_seams; i++)
     {
         double start_iter = omp_get_wtime();
-        energy(image_energy, image_in, width, height, cpp, 8);
+        energy(image_energy, image_in, width, height, cpp, n_threads_energy);
         double stop_energy = omp_get_wtime();
         cum_energy_path_cost(image_energy, width, height);
         double stop_cum_energy = omp_get_wtime();
