@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# USAGE: ./run_prog fastcarve.cpp [ARGS]
+# USAGE: ./run_prog prog.cpp [ARGS]
 
 sbatch <<EOT
 #!/bin/bash
 
 #SBATCH --reservation=fri
-#SBATCH --job-name=code_sample
+#SBATCH --job-name=steve
 #SBATCH --ntasks=1
-#SBATCH --output=sample_out.log
+#SBATCH --cpus-per-task=64
+#SBATCH --output=steve_out.log
 #SBATCH --hint=nomultithread
 
 # Set OpenMP environment variables for thread placement and binding    
@@ -20,7 +21,7 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 module load numactl
 
 # Compile
-gcc -O3 -lm -lnuma --openmp $1 -o a.out
+gcc -O3 -lm -lnuma -fopenmp $1 -o a.out
 
 # Run
 srun a.out ${@:2}
