@@ -115,9 +115,9 @@ void cum_line(ENERGY_TYPE* energy, int x_start, int x_end, const int y, const in
     }
 }
 
-void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height) {
+void cum_parallel(ENERGY_TYPE *energy, const size_t width, const size_t height, const int n_threads) {
     // parameters
-    const int thread_count = 12; // will consume thread_count or thread_count + 1 threads
+    const int thread_count = n_threads; // will consume thread_count or thread_count + 1 threads
 
     const int trig_base = width / thread_count + (width % thread_count != 0);
     const int trig_height = trig_base / 2 + (trig_base % 2 != 0);
@@ -254,9 +254,9 @@ size_t remove_seam(ENERGY_TYPE *cum_energy, unsigned char *image, const size_t c
 
 int main(int argc, char *argv[])
 {
-    if (argc < 5)
+    if (argc < 6)
     {
-        printf("USAGE: ./a.out input_image output_image remove_N_seams n_threads_energy\n");
+        printf("USAGE: ./a.out input_image output_image remove_N_seams n_threads_energy n_threads_cum\n");
         exit(EXIT_FAILURE);
     }
 
@@ -299,6 +299,7 @@ int main(int argc, char *argv[])
     }
 
     int n_threads_energy = atoi(argv[4]);
+    int n_threads_cum = atoi(argv[5]);
 
     double energy_time_sum = 0;
     double cum_energy_time_sum = 0;
@@ -311,7 +312,7 @@ int main(int argc, char *argv[])
         double start_iter = omp_get_wtime();
         energy(image_energy, image_in, width, height, cpp, n_threads_energy);
         double stop_energy = omp_get_wtime();
-        cum_parallel(image_energy, width, height);
+        cum_parallel(image_energy, width, height, n_threads_cum);
         double stop_cum_energy = omp_get_wtime();
         width = remove_seam(image_energy, image_in, cpp, width, height, 0); // i == remove_N_seams - 1
         double stop_seam = omp_get_wtime();
@@ -336,7 +337,7 @@ int main(int argc, char *argv[])
     }
     if (remove_N_seams == 0) {
         energy(image_energy, image_in, width, height, cpp, n_threads_energy);
-        cum_parallel(image_energy, width, height);
+        cum_parallel(image_energy, width, height, n_threads_cum);
         width = remove_seam(image_energy, image_in, cpp, width, height, true);
     }
 
