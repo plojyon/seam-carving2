@@ -9,22 +9,22 @@ sbatch <<EOT
 #SBATCH --job-name=steve
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
-#SBATCH --output=steve_out.log
+#SBATCH --output=$1
 #SBATCH --hint=nomultithread
 
 # Set OpenMP environment variables for thread placement and binding    
 export OMP_PLACES=cores
 export OMP_PROC_BIND=close
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_NUM_THREADS=\$SLURM_CPUS_PER_TASK
 
 # Load the numactl module to enable numa library linking
 module load numactl
 
 # Compile
-gcc -O3 -lm -lnuma -fopenmp $1 -o a.out
+gcc -O3 -lm -lnuma -fopenmp $2 -o a.out
 
 # Run
-srun a.out ${@:2}
+srun a.out ${@:3}
 
 exit 0
 EOT
