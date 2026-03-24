@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# USAGE: ./run_prog prog.cpp [ARGS]
+# USAGE: ./run_prog steve_log.log prog.cpp [ARGS]
 
 sbatch <<EOT
 #!/bin/bash
